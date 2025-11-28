@@ -1,0 +1,288 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       String    @id @default(uuid())
+  email                    String    @unique @db.VarChar(255)
+  password                 String    @db.VarChar(255)
+  name                     String?   @db.VarChar(100)
+  profileUrl               String?   @map("profile_url") @db.VarChar(255)
+  phone                    String?   @db.VarChar(20)
+  location                 String?   @db.VarChar(255)
+  bio                      String?   @db.Text
+  isEmailVerified          Boolean   @default(false) @map("is_email_verified")
+  emailVerificationCode    String?   @map("email_verification_code") @db.VarChar(10)
+  emailVerificationExpires DateTime? @map("email_verification_expires")
+  loginOtpCode             String?   @map("login_otp_code") @db.VarChar(10)
+  loginOtpExpires          DateTime? @map("login_otp_expires")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  products       Product[]
+  cart           Cart?
+  orders         Order[]     @relation("BuyerOrders")
+  cartItemsSold  CartItem[]  @relation("SellerCartItems")
+  orderItemsSold OrderItem[] @relation("SellerOrderItems")
+  orderActivities OrderActivity[] @relation("OrderActivityAuthors")
+  addresses       UserAddress[]
+  accountSetting  UserAccountSetting?
+  helpRequests    UserHelpRequest[]
+  notifications   Notification[]
+
+  @@index([email])
+  @@index([isEmailVerified])
+  @@index([createdAt])
+  @@map("users")
+}
+
+enum ProductCategory {
+  ELECTRONICS
+  HOME_GARDEN
+  FASHION
+  BEAUTY
+  SPORTS
+  TOYS
+}
+
+enum ProductUnit {
+  GRAM
+  KILOGRAM
+  MILLIGRAM
+  TONNE
+  POUND
+  OUNCE
+  LITER
+  MILLILITER
+  GALLON
+  BARREL
+  CUP
+  TEASPOON
+  TABLESPOON
+  CUBIC_METER
+  CUBIC_FOOT
+  PIECE
+  PACK
+  BAG
+  BOTTLE
+}
+
+enum Status {
+  Active
+  Draft
+  Paused
+  Sold
+}
+
+enum OrderStatus {
+  Pending
+  Received
+  Accepted
+  Paid
+  Shipped
+  Delivered
+  Cancelled
+}
+
+enum NotificationType {
+  ORDER_STATUS
+  ORDER_ACTIVITY
+  SYSTEM
+}
+
+model Product {
+  id          String            @id @default(uuid())
+  name        String
+  status      Status            @default(Draft)
+  description String?
+  categories  ProductCategory[]
+  price       Float
+  quantity    Float             @default(1)
+  unit        ProductUnit       @default(KILOGRAM)
+  images      String[]          @default([])
+  variations  Json? // <-- optional: you said remove variations, remove this line if you want DB removed
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  creatorId   String
+  creator     User              @relation(fields: [creatorId], references: [id])
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+
+  @@index([creatorId])
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([createdAt])
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  productId String
+  sellerId  String
+  quantity  Int      @default(1)
+  unitPrice Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  seller  User    @relation("SellerCartItems", fields: [sellerId], references: [id])
+
+  @@unique([cartId, productId])
+  @@index([productId])
+  @@index([sellerId])
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  buyerId     String
+  buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  status      OrderStatus @default(Received)
+  totalAmount Float
+  buyerNote   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+  activities  OrderActivity[]
+  notifications Notification[]
+
+  @@index([buyerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  sellerId  String
+  quantity  Int
+  unitPrice Float
+  subtotal  Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  seller  User    @relation("SellerOrderItems", fields: [sellerId], references: [id])
+
+  @@index([orderId])
+  @@index([sellerId])
+  @@index([productId])
+}
+
+model OrderActivity {
+  id        String   @id @default(uuid())
+  orderId   String
+  authorId  String
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  author User  @relation("OrderActivityAuthors", fields: [authorId], references: [id])
+
+  @@index([orderId])
+  @@index([authorId])
+}
+
+enum AddressLabel {
+  HOME
+  WAREHOUSE
+  GODOWN
+  SHOP
+  OTHER
+}
+
+model UserAddress {
+  id            String       @id @default(uuid())
+  userId        String
+  label         AddressLabel @default(OTHER)
+  contactName   String       @db.VarChar(150)
+  contactNumber String?      @db.VarChar(20)
+  addressLine1  String       @db.VarChar(255)
+  addressLine2  String?      @db.VarChar(255)
+  city          String?      @db.VarChar(120)
+  state         String       @db.VarChar(120)
+  pincode       String       @db.VarChar(12)
+  landmark      String?      @db.VarChar(255)
+  isDefault     Boolean      @default(false) @map("is_default")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_addresses")
+}
+
+model UserAccountSetting {
+  id                         String   @id @default(uuid())
+  userId                     String   @unique
+  orderMessageNotifications  Boolean  @default(true) @map("order_message_notifications")
+  orderActivityNotifications Boolean  @default(true) @map("order_activity_notifications")
+  doNotDisturbEnabled        Boolean  @default(false) @map("dnd_enabled")
+  doNotDisturbFrom           DateTime? @map("dnd_from")
+  doNotDisturbTo             DateTime? @map("dnd_to")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_account_settings")
+}
+
+model UserHelpRequest {
+  id            String   @id @default(uuid())
+  userId        String
+  name          String   @db.VarChar(150)
+  email         String?  @db.VarChar(255)
+  phone         String?  @db.VarChar(20)
+  subject       String   @db.VarChar(200)
+  message       String   @db.Text
+  attachmentUrl String?  @db.VarChar(500) @map("attachment_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_help_requests")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  orderId   String?
+  type      NotificationType
+  title     String           @db.VarChar(180)
+  message   String           @db.Text
+  metadata  Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([orderId])
+  @@map("notifications")
+}
