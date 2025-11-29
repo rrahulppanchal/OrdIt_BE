@@ -9,7 +9,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ordit_db?schema=public
       - PORT=8000
     env_file:
-      - .env.docker
+      - .env.production
     depends_on:
       - postgres
     restart: always
