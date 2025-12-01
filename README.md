@@ -135,3 +135,25 @@ To run the application using Docker Compose with a specific environment file:
 docker-compose down
 docker-compose --env-file .env.docker up -d
 ```
+
+## SSL Setup with Certbot
+
+To set up SSL for `playbuddys.com` and `www.playbuddys.com`:
+
+1.  Start the services:
+    ```bash
+    docker-compose --env-file .env.docker up -d
+    ```
+
+2.  Run Certbot to generate certificates:
+    ```bash
+    docker-compose run --rm certbot certonly --webroot --webroot-path /var/www/certbot -d playbuddys.com -d www.playbuddys.com
+    ```
+
+3.  Once certificates are generated, uncomment the SSL server block in `nginx.conf`.
+
+4.  Reload Nginx:
+    ```bash
+    docker-compose exec nginx nginx -s reload
+    ```
+
